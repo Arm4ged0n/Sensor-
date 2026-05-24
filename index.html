@@ -539,7 +539,7 @@ input[type=range]::-webkit-slider-thumb {
       <div class="apneia-left">
         <div class="card-label">Sem respiração</div>
         <div class="apneia-timer" id="apneiaTimer">0.0s</div>
-        <div class="card-unit">alarme em 4s</div>
+        <div class="card-unit">alarme em 8s</div>
       </div>
       <div style="font-size:1.8rem">⏱️</div>
     </div>
@@ -841,6 +841,7 @@ function detectCycles() {
 function runApneiaWatch() {
   setInterval(() => {
     if (!isRunning) return;
+
     const gap = (Date.now() - BR.lastBreathTime) / 1000;
     BR.apneiaTimer = gap;
 
@@ -848,18 +849,45 @@ function runApneiaWatch() {
     const cardEl  = document.getElementById('apneiaCard');
     timerEl.textContent = gap.toFixed(1) + 's';
 
-    if (gap >= 4 && !BR.alarmFired && BR.cycles > 2) {
+    // Condições para disparar alarme:
+    // 1. Câmera ativa
+    // 2. Calibração concluída
+    // 3. Bebê presente (sensor de presença confirmou)
+    // 4. Mínimo de 5 ciclos detectados (sistema estabilizado)
+    // 5. Sem respiração por 8s (não 4s — evita falsos positivos)
+    const podeDisparar =
+      PR.isCalibrated &&
+      PR.present &&
+      BR.cycles >= 5 &&
+      !BR.alarmFired;
+
+    if (gap >= 8 && podeDisparar) {
       BR.alarmFired = true;
       alertCount++;
       document.getElementById('bAlerts').textContent = alertCount;
-      fireAlarm('APNEIA DETECTADA', `Sem respiração por ${gap.toFixed(1)}s. Verifique imediatamente.`);
+      fireAlarm('🚨 APNEIA DETECTADA', `Sem respiração por ${gap.toFixed(1)}s. Verifique o bebê imediatamente.`);
       timerEl.className = 'apneia-timer alert';
       cardEl.className = 'card apneia alert';
       addLog(`🚨 Apneia: ${gap.toFixed(1)}s sem respiração`, 'r');
-    } else if (gap < 4) {
+    } else if (gap < 8) {
       BR.alarmFired = false;
       timerEl.className = 'apneia-timer';
       cardEl.className = 'card apneia';
+    }
+
+    // Mostrar estado no card de apneia
+    const cardUnit = cardEl.querySelector('.card-unit');
+    if (cardUnit) {
+      if (!PR.isCalibrated) {
+        cardUnit.textContent = 'calibrando...';
+      } else if (!PR.present) {
+        cardUnit.textContent = 'bebê não detectado';
+        timerEl.className = 'apneia-timer'; // reseta visual
+      } else if (BR.cycles < 5) {
+        cardUnit.textContent = `estabilizando (${BR.cycles}/5 ciclos)`;
+      } else {
+        cardUnit.textContent = 'alarme em 8s';
+      }
     }
   }, 200);
 }
