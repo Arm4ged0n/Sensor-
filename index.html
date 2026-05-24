@@ -465,7 +465,8 @@ input[type=range]::-webkit-slider-thumb {
     <div class="alarm-emoji">🚨</div>
     <div class="alarm-title" id="alarmTitle">APNEIA DETECTADA</div>
     <div class="alarm-msg" id="alarmMsg">Nenhuma respiração detectada por 4 segundos. Verifique imediatamente.</div>
-    <button class="alarm-dismiss" onclick="dismissAlarm()">DISPENSAR ALARME</button>
+    <button class="alarm-dismiss" onclick="dismissAlarm()">✓ DISPENSAR ALARME</button>
+    <button onclick="triggerBeep()" style="margin-top:8px;width:100%;padding:10px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:0.8rem;cursor:pointer">🔊 Testar Som</button>
   </div>
 </div>
 
@@ -492,6 +493,7 @@ input[type=range]::-webkit-slider-thumb {
     <span id="nextWrap">PRÓX <b id="nextEl">—</b></span>
   </div>
   <div style="display:flex;gap:8px">
+    <button onclick="triggerBeep()" style="padding:8px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:0.75rem;cursor:pointer">🔊 Testar Som</button>
     <button class="btn-start" id="startBtn" onclick="startCamera()">▶ Iniciar Câmera</button>
     <button class="btn-stop"  id="stopBtn"  onclick="stopCamera()">■ Parar</button>
   </div>
@@ -626,7 +628,7 @@ input[type=range]::-webkit-slider-thumb {
 <!-- BOTTOM -->
 <div class="bottom">
   <span>BabyBreath v4 · Optical Flow + Presença</span>
-  <span>Análises <b id="bAnalyses">0</b> · Alertas <b id="bAlerts" style="color:var(--red)">0</b></span>
+  <span style="color:var(--muted);font-size:0.58rem;text-align:right">Desenvolvido por <b style="color:var(--blue)">Sandro de Souza Fagundes</b><br>© Direitos Reservados 2026</span>
 </div>
 
 <script>
@@ -896,24 +898,68 @@ function fireAlarm(title, msg) {
   document.getElementById('alarmTitle').textContent = title;
   document.getElementById('alarmMsg').textContent = msg;
   document.getElementById('alarmOverlay').className = 'show';
-  // Sound: oscillator beep
+  playAlarmSound();
+}
+
+// Toca som repetido enquanto alarme estiver ativo
+let alarmSoundInterval = null;
+
+function playAlarmSound() {
+  stopAlarmSound();
+  // Toca imediatamente e repete a cada 1.5s
+  triggerBeep();
+  alarmSoundInterval = setInterval(() => {
+    if (document.getElementById('alarmOverlay').className === 'show') {
+      triggerBeep();
+    } else {
+      stopAlarmSound();
+    }
+  }, 1500);
+}
+
+function stopAlarmSound() {
+  if (alarmSoundInterval) {
+    clearInterval(alarmSoundInterval);
+    alarmSoundInterval = null;
+  }
+}
+
+function triggerBeep() {
   try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.4, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
-    osc.start(); osc.stop(ctx.currentTime + 1.5);
-  } catch(e) {}
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Sequência de 3 bipes urgentes
+    [0, 0.2, 0.4].forEach(delay => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'square'; // mais agressivo que sine
+      osc.frequency.value = 1000;
+
+      // Volume alto
+      gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + delay + 0.01);
+      gain.gain.setValueAtTime(1.0, ctx.currentTime + delay + 0.15);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + delay + 0.18);
+
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.2);
+    });
+
+    // Fecha o contexto após os bipes
+    setTimeout(() => ctx.close(), 1000);
+  } catch(e) {
+    console.warn('Áudio falhou:', e);
+  }
 }
 
 function dismissAlarm() {
   document.getElementById('alarmOverlay').className = '';
   BR.alarmFired = false;
   BR.lastBreathTime = Date.now();
+  stopAlarmSound();
 }
 
 // ── UPDATE UI ──
