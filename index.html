@@ -516,6 +516,26 @@ input[type=range]::-webkit-slider-thumb {
 <!-- BODY -->
 <div class="body">
 
+  <!-- SELETOR DE FAIXA ETÁRIA -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+    <div class="section-title">Faixa Etária do Monitorado</div>
+    <select onchange="setAgeGroup(this.value)" id="ageSelect"
+      style="width:100%;padding:10px 12px;background:var(--card);border:1px solid var(--border);
+             border-radius:8px;color:var(--text);font-size:0.9rem;font-family:var(--sans);outline:none">
+      <option value="newborn">👶 Recém-nascido — 30–60 rpm · apneia 6s</option>
+      <option value="infant">🍼 Bebê 1–12 meses — 24–40 rpm · apneia 6s</option>
+      <option value="toddler">🧒 Criança 1–3 anos — 22–34 rpm · apneia 8s</option>
+      <option value="child5" selected>👦 Criança 3–5 anos — 20–30 rpm · apneia 8s</option>
+      <option value="child12">🧑 Criança 6–12 anos — 18–26 rpm · apneia 10s</option>
+      <option value="teen">🧑‍🎓 Adolescente — 14–22 rpm · apneia 10s</option>
+      <option value="adult">🧑‍💼 Adulto — 12–20 rpm · apneia 10s</option>
+    </select>
+    <div style="margin-top:8px;font-size:0.68rem;color:var(--muted);display:flex;justify-content:space-between">
+      <span id="rpmRef">Normal: 20–30 rpm</span>
+      <span id="apneiaRef">alarme em 8s</span>
+    </div>
+  </div>
+
   <!-- BREATHING HERO -->
   <div class="breath-hero">
     <div class="section-title">Respiração em Tempo Real</div>
@@ -863,15 +883,18 @@ function runApneiaWatch() {
       BR.cycles >= 5 &&
       !BR.alarmFired;
 
-    if (gap >= 8 && podeDisparar) {
+    const g = AGE_GROUPS[currentAge];
+    const apneiaLimit = g.apneia;
+
+    if (gap >= apneiaLimit && podeDisparar) {
       BR.alarmFired = true;
       alertCount++;
       document.getElementById('bAlerts').textContent = alertCount;
-      fireAlarm('🚨 APNEIA DETECTADA', `Sem respiração por ${gap.toFixed(1)}s. Verifique o bebê imediatamente.`);
+      fireAlarm('🚨 APNEIA DETECTADA', `Sem respiração por ${gap.toFixed(1)}s. Verifique imediatamente.`);
       timerEl.className = 'apneia-timer alert';
       cardEl.className = 'card apneia alert';
       addLog(`🚨 Apneia: ${gap.toFixed(1)}s sem respiração`, 'r');
-    } else if (gap < 8) {
+    } else if (gap < apneiaLimit) {
       BR.alarmFired = false;
       timerEl.className = 'apneia-timer';
       cardEl.className = 'card apneia';
@@ -884,11 +907,11 @@ function runApneiaWatch() {
         cardUnit.textContent = 'calibrando...';
       } else if (!PR.present) {
         cardUnit.textContent = 'bebê não detectado';
-        timerEl.className = 'apneia-timer'; // reseta visual
+        timerEl.className = 'apneia-timer';
       } else if (BR.cycles < 5) {
         cardUnit.textContent = `estabilizando (${BR.cycles}/5 ciclos)`;
       } else {
-        cardUnit.textContent = 'alarme em 8s';
+        cardUnit.textContent = `alarme em ${apneiaLimit}s · ${g.label}`;
       }
     }
   }, 200);
@@ -965,11 +988,17 @@ function dismissAlarm() {
 // ── UPDATE UI ──
 function updateBreathUI() {
   const rpm = BR.rpm;
+  const g = AGE_GROUPS[currentAge];
 
-  // RPM big display
+  // RPM big display — cor baseada na faixa etária
   const rpmEl = document.getElementById('bpmBig');
   rpmEl.textContent = rpm > 0 ? rpm.toFixed(1) : '—';
-  rpmEl.className = 'breath-rpm-big' + (rpm > 0 ? (rpm<8||rpm>60 ? ' danger' : rpm<12||rpm>40 ? ' warn' : '') : '');
+  let rpmCls = '';
+  if (rpm > 0) {
+    if (rpm < g.min * 0.7 || rpm > g.max * 1.3) rpmCls = ' danger';
+    else if (rpm < g.min || rpm > g.max) rpmCls = ' warn';
+  }
+  rpmEl.className = 'breath-rpm-big' + rpmCls;
 
   // Phase
   const orb = document.getElementById('breathOrb');
@@ -990,8 +1019,8 @@ function updateBreathUI() {
   const badge = document.getElementById('statusBadge');
   let txt = '—', cls = '';
   if (rpm > 0) {
-    if (rpm >= 12 && rpm <= 40) { txt = 'NORMAL'; cls = ''; }
-    else if (rpm < 8 || rpm > 60) { txt = 'ATENÇÃO'; cls = 'danger'; }
+    if (rpm >= g.min && rpm <= g.max) { txt = 'NORMAL'; cls = ''; }
+    else if (rpm < g.min * 0.7 || rpm > g.max * 1.3) { txt = 'ATENÇÃO'; cls = 'danger'; }
     else { txt = 'LIMÍTROFE'; cls = 'warn'; }
   } else if (isRunning) { txt = 'CALIBRANDO'; cls = 'warn'; }
   badge.textContent = txt; badge.className = 'breath-status-badge ' + cls;
@@ -1005,9 +1034,9 @@ function updateBreathUI() {
   qEl.textContent = q > 70 ? 'Boa' : q > 40 ? 'Média' : q > 0 ? 'Fraca' : '—';
   qEl.className = 'card-value ' + (q > 70 ? 'green' : q > 40 ? 'yellow' : 'red');
 
-  // RPM alert
-  if (rpm > 0 && (rpm > 60 || rpm < 8) && BR.cycles % 3 === 0)
-    addLog(`⚠ RPM fora do normal: ${rpm}`, 'r');
+  // Alerta RPM fora da faixa
+  if (rpm > 0 && (rpm < g.min || rpm > g.max) && BR.cycles % 5 === 0)
+    addLog(`⚠ Respiração fora do normal: ${rpm} rpm (esperado ${g.min}–${g.max})`, 'r');
 }
 
 // ── WAVE RENDERER ──
@@ -1101,7 +1130,30 @@ function renderWave() {
   }
 }
 
-// ── PRESENCE DETECTION ──
+// ── FAIXAS ETÁRIAS ──
+const AGE_GROUPS = {
+  newborn:  { label: 'Recém-nascido',   min: 30, max: 60, apneia: 6  },
+  infant:   { label: 'Bebê 1–12m',      min: 24, max: 40, apneia: 6  },
+  toddler:  { label: 'Criança 1–3a',    min: 22, max: 34, apneia: 8  },
+  child5:   { label: 'Criança 3–5a',    min: 20, max: 30, apneia: 8  },
+  child12:  { label: 'Criança 6–12a',   min: 18, max: 26, apneia: 10 },
+  teen:     { label: 'Adolescente',     min: 14, max: 22, apneia: 10 },
+  adult:    { label: 'Adulto',          min: 12, max: 20, apneia: 10 },
+};
+
+let currentAge = 'child5'; // padrão
+
+function setAgeGroup(val) {
+  currentAge = val;
+  const g = AGE_GROUPS[val];
+  // Atualiza label de referência
+  document.getElementById('rpmRef').textContent = `Normal: ${g.min}–${g.max} rpm`;
+  document.getElementById('apneiaRef').textContent = `alarme em ${g.apneia}s`;
+  addLog(`Faixa etária: ${g.label} (${g.min}–${g.max} rpm)`, 'g');
+  updateBreathUI();
+}
+
+
 const PR = {
   prevFrame: null,
   motionLevel: 0,
