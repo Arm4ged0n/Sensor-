@@ -322,7 +322,97 @@ canvas#overlayCanvas { position: absolute; inset: 0; width: 100%; height: 100%; 
 .log-msg { flex: 1; color: var(--text); }
 .log-time { font-family: var(--mono); font-size: 0.6rem; color: var(--muted); white-space: nowrap; }
 
-/* ── BOTTOM BAR ── */
+/* ── PRESENCE CARD ── */
+.presence-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.4s, background 0.4s;
+}
+.presence-card.present  { border-color: var(--green); background: rgba(63,185,80,0.06); }
+.presence-card.absent   { border-color: var(--yellow); background: rgba(210,153,34,0.06); }
+.presence-card.unknown  { border-color: var(--border); }
+
+.presence-top {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+}
+.presence-icon {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem; flex-shrink: 0;
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+.presence-icon.present {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(63,185,80,0.3);
+}
+.presence-icon.absent { border-color: var(--yellow); }
+
+.presence-info { flex: 1; }
+.presence-state {
+  font-size: 1.1rem; font-weight: 700;
+  color: var(--muted); transition: color 0.3s;
+}
+.presence-state.present { color: var(--green); }
+.presence-state.absent  { color: var(--yellow); }
+.presence-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+.presence-badge {
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px;
+  background: rgba(63,185,80,0.1);
+  color: var(--green); border: 1px solid rgba(63,185,80,0.3);
+  align-self: flex-start;
+}
+.presence-badge.absent { background: rgba(210,153,34,0.1); color: var(--yellow); border-color: rgba(210,153,34,0.3); }
+.presence-badge.unknown { background: var(--card); color: var(--muted); border-color: var(--border); }
+
+/* Motion bar */
+.motion-bar-wrap {
+  margin-top: 4px;
+}
+.motion-label {
+  display: flex; justify-content: space-between;
+  font-size: 0.65rem; color: var(--muted); margin-bottom: 5px;
+}
+.motion-track {
+  height: 6px; background: var(--card);
+  border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.motion-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--green);
+  transition: width 0.3s ease, background 0.3s;
+  width: 0%;
+}
+
+/* Calibration overlay */
+.calib-bar-wrap { margin-top: 10px; display: none; }
+.calib-label { font-size: 0.65rem; color: var(--blue); margin-bottom: 5px; display: flex; justify-content: space-between; }
+.calib-track { height: 4px; background: var(--card); border-radius: 2px; overflow: hidden; }
+.calib-fill  { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.5s linear; width: 0%; }
+
+/* Sensitivity slider */
+.sensitivity-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.sensitivity-row label { font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
+input[type=range] {
+  flex: 1; -webkit-appearance: none;
+  height: 4px; background: var(--border); border-radius: 2px; outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--green); cursor: pointer;
+  box-shadow: 0 0 6px rgba(63,185,80,0.4);
+}
+.sensitivity-val { font-family: var(--mono); font-size: 0.65rem; color: var(--green); min-width: 28px; text-align: right; }
+
 .bottom {
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -479,6 +569,43 @@ canvas#overlayCanvas { position: absolute; inset: 0; width: 100%; height: 100%; 
     </div>
   </div>
 
+  <!-- PRESENCE DETECTION -->
+  <div class="presence-card unknown" id="presenceCard">
+    <div class="section-title">Sensor de Presença</div>
+    <div class="presence-top">
+      <div class="presence-icon" id="presenceIcon">👶</div>
+      <div class="presence-info">
+        <div class="presence-state" id="presenceState">Aguardando...</div>
+        <div class="presence-sub" id="presenceSub">Inicie a câmera para detectar presença</div>
+      </div>
+      <div class="presence-badge unknown" id="presenceBadge">—</div>
+    </div>
+
+    <div class="motion-bar-wrap">
+      <div class="motion-label">
+        <span>Movimento detectado</span>
+        <span id="motionPct">0%</span>
+      </div>
+      <div class="motion-track">
+        <div class="motion-fill" id="motionFill"></div>
+      </div>
+    </div>
+
+    <div class="calib-bar-wrap" id="calibWrap">
+      <div class="calib-label">
+        <span>⏳ Calibrando — aguarde antes de monitorar</span>
+        <span id="calibPct">0%</span>
+      </div>
+      <div class="calib-track"><div class="calib-fill" id="calibFill"></div></div>
+    </div>
+
+    <div class="sensitivity-row">
+      <label>Sensibilidade</label>
+      <input type="range" id="sensitivitySlider" min="1" max="10" value="5" oninput="updateSensitivity(this.value)">
+      <span class="sensitivity-val" id="sensitivityVal">5</span>
+    </div>
+  </div>
+
   <!-- LOG -->
   <div class="log">
     <div class="log-header">
@@ -498,7 +625,7 @@ canvas#overlayCanvas { position: absolute; inset: 0; width: 100%; height: 100%; 
 
 <!-- BOTTOM -->
 <div class="bottom">
-  <span>BabyBreath v3 · Optical Flow</span>
+  <span>BabyBreath v4 · Optical Flow + Presença</span>
   <span>Análises <b id="bAnalyses">0</b> · Alertas <b id="bAlerts" style="color:var(--red)">0</b></span>
 </div>
 
@@ -557,6 +684,8 @@ async function startCamera() {
 
     trackFPS();
     setTimeout(startBreathing, 800);
+    setTimeout(startPresenceDetection, 1000);
+    requestWakeLock();
     addLog('Câmera iniciada', 'g');
   } catch(e) {
     addLog('Erro: ' + e.message, 'r');
@@ -576,6 +705,8 @@ function stopCamera() {
   document.getElementById('statusPill').className = 'status-pill';
   document.getElementById('statusText').textContent = 'OFFLINE';
   stopBreathing();
+  stopPresenceDetection();
+  releaseWakeLock();
   addLog('Câmera encerrada', 'y');
 }
 
@@ -896,7 +1027,192 @@ function renderWave() {
   }
 }
 
-// ── LOG ──
+// ── PRESENCE DETECTION ──
+const PR = {
+  prevFrame: null,
+  motionLevel: 0,
+  present: false,
+  absent: false,
+  absentSince: null,
+  sensitivity: 5,
+  calibrating: false,
+  calibStart: null,
+  CALIB_MS: 30000,   // 30s calibration
+  isCalibrated: false,
+  worker: null,
+  presCapCanvas: null,
+  presCapCtx: null,
+};
+
+const PRESENCE_W = 40, PRESENCE_H = 30;
+PR.presCapCanvas = document.createElement('canvas');
+PR.presCapCanvas.width = PRESENCE_W; PR.presCapCanvas.height = PRESENCE_H;
+PR.presCapCtx = PR.presCapCanvas.getContext('2d', { willReadFrequently: true });
+
+function startPresenceDetection() {
+  if (PR.worker) clearInterval(PR.worker);
+  PR.calibrating = true;
+  PR.isCalibrated = false;
+  PR.calibStart = Date.now();
+  document.getElementById('calibWrap').style.display = 'block';
+  PR.worker = setInterval(detectPresence, 500); // sample every 500ms
+  addLog('Calibrando sensor de presença (30s)...', 'g');
+  updatePresenceUI('calibrating', 0);
+}
+
+function stopPresenceDetection() {
+  if (PR.worker) clearInterval(PR.worker);
+  PR.worker = null;
+  PR.prevFrame = null;
+  PR.present = false;
+  PR.calibrating = false;
+  PR.isCalibrated = false;
+  document.getElementById('calibWrap').style.display = 'none';
+  updatePresenceUI('unknown', 0);
+}
+
+function detectPresence() {
+  if (!isRunning || !video.videoWidth) return;
+
+  // Capture full frame downscaled
+  PR.presCapCtx.drawImage(video, 0, 0, PRESENCE_W, PRESENCE_H);
+  const curr = PR.presCapCtx.getImageData(0, 0, PRESENCE_W, PRESENCE_H).data;
+
+  if (!PR.prevFrame) {
+    PR.prevFrame = curr.slice();
+    return;
+  }
+
+  // Compute pixel diff
+  let diff = 0, count = 0;
+  const threshold = (11 - PR.sensitivity) * 3; // sensitivity 1–10 → threshold 30–3
+  for (let i = 0; i < curr.length; i += 4) {
+    const dr = Math.abs(curr[i]   - PR.prevFrame[i]);
+    const dg = Math.abs(curr[i+1] - PR.prevFrame[i+1]);
+    const db = Math.abs(curr[i+2] - PR.prevFrame[i+2]);
+    const pixDiff = (dr + dg + db) / 3;
+    if (pixDiff > threshold) count++;
+    diff += pixDiff;
+  }
+  const totalPx = (curr.length / 4);
+  const motionPct = Math.round((count / totalPx) * 100);
+  PR.motionLevel = motionPct;
+  PR.prevFrame = curr.slice();
+
+  // Calibration phase
+  if (PR.calibrating) {
+    const elapsed = Date.now() - PR.calibStart;
+    const pct = Math.min(100, Math.round((elapsed / PR.CALIB_MS) * 100));
+    document.getElementById('calibFill').style.width = pct + '%';
+    document.getElementById('calibPct').textContent = pct + '%';
+    updatePresenceUI('calibrating', motionPct);
+    if (elapsed >= PR.CALIB_MS) {
+      PR.calibrating = false;
+      PR.isCalibrated = true;
+      document.getElementById('calibWrap').style.display = 'none';
+      addLog('Calibração concluída — monitorando presença', 'g');
+    }
+    return;
+  }
+
+  // Presence logic: >3% pixel change = movement detected = present
+  const presenceThreshold = 3;
+  const wasPresent = PR.present;
+
+  if (motionPct >= presenceThreshold) {
+    PR.present = true;
+    PR.absent = false;
+    PR.absentSince = null;
+    if (!wasPresent) {
+      addLog('👶 Bebê detectado no berço', 'g');
+      // Resume apneia watch
+      BR.lastBreathTime = Date.now();
+    }
+  } else {
+    // No motion — could be still sleeping (normal) or absent
+    // Only mark absent after 10s of zero motion AND not calibrated motion
+    if (!PR.absentSince) PR.absentSince = Date.now();
+    const goneFor = (Date.now() - PR.absentSince) / 1000;
+    if (goneFor > 10) {
+      PR.present = false;
+      PR.absent = true;
+      if (wasPresent) addLog('⚠ Bebê não detectado no berço', 'y');
+    }
+  }
+
+  updatePresenceUI(
+    PR.present ? 'present' : PR.absent ? 'absent' : 'unknown',
+    motionPct
+  );
+}
+
+function updatePresenceUI(state, motionPct) {
+  const card  = document.getElementById('presenceCard');
+  const icon  = document.getElementById('presenceIcon');
+  const stEl  = document.getElementById('presenceState');
+  const sub   = document.getElementById('presenceSub');
+  const badge = document.getElementById('presenceBadge');
+  const fill  = document.getElementById('motionFill');
+  const pct   = document.getElementById('motionPct');
+
+  // Motion bar
+  const mp = Math.min(100, motionPct * 4); // amplify for visibility
+  fill.style.width = mp + '%';
+  fill.style.background = mp > 40 ? 'var(--yellow)' : mp > 15 ? 'var(--green)' : 'var(--muted)';
+  pct.textContent = motionPct + '%';
+
+  if (state === 'calibrating') {
+    card.className = 'presence-card unknown';
+    icon.className = 'presence-icon'; icon.textContent = '⏳';
+    stEl.className = 'presence-state'; stEl.textContent = 'Calibrando...';
+    sub.textContent = 'Aprenda o ambiente por 30s';
+    badge.className = 'presence-badge unknown'; badge.textContent = 'CALIBRANDO';
+  } else if (state === 'present') {
+    card.className = 'presence-card present';
+    icon.className = 'presence-icon present'; icon.textContent = '👶';
+    stEl.className = 'presence-state present'; stEl.textContent = 'Bebê no berço';
+    sub.textContent = `Movimento: ${motionPct}% · Monitorando respiração`;
+    badge.className = 'presence-badge'; badge.textContent = 'PRESENTE';
+  } else if (state === 'absent') {
+    card.className = 'presence-card absent';
+    icon.className = 'presence-icon absent'; icon.textContent = '🔍';
+    stEl.className = 'presence-state absent'; stEl.textContent = 'Nenhum bebê detectado';
+    sub.textContent = 'Verifique o posicionamento da câmera';
+    badge.className = 'presence-badge absent'; badge.textContent = 'AUSENTE';
+  } else {
+    card.className = 'presence-card unknown';
+    icon.className = 'presence-icon'; icon.textContent = '👶';
+    stEl.className = 'presence-state'; stEl.textContent = 'Aguardando...';
+    sub.textContent = 'Inicie a câmera para detectar presença';
+    badge.className = 'presence-badge unknown'; badge.textContent = '—';
+  }
+}
+
+function updateSensitivity(val) {
+  PR.sensitivity = parseInt(val);
+  document.getElementById('sensitivityVal').textContent = val;
+}
+
+// ── WAKE LOCK (tela não apaga) ──
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      addLog('Tela bloqueada — não vai apagar', 'g');
+    }
+  } catch(e) { /* silently fail */ }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+// Re-request wake lock when tab becomes visible again
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible' && isRunning) {
+    await requestWakeLock();
+  }
+});
+
 let logTotal = 0;
 function addLog(msg, type='g') {
   logTotal++;
